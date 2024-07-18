@@ -168,23 +168,6 @@ class ScreenPet(QWidget):
         self.reminder_dialog.show()
         self.reminder_dialog.update_position()
 
-        def animate_speech_bubble(self):
-            animation = QPropertyAnimation(self.speech_bubble, b"pos")
-            animation.setDuration(500)
-            animation.setStartValue(self.speech_bubble.pos())
-            animation.setEndValue(QPoint(self.speech_bubble.x(), 0))  # 移动到宠物上方
-            animation.setEasingCurve(QEasingCurve.Type.OutBack)
-            animation.start()
-
-    def animate_buttons(self):
-        for button in [self.start_button, self.delay_button]:
-            animation = QPropertyAnimation(button, b"pos")
-            animation.setDuration(500)
-            animation.setStartValue(button.pos())
-            animation.setEndValue(QPoint(button.x(), self.height() - button.height()))
-            animation.setEasingCurve(QEasingCurve.Type.OutBack)
-            animation.start()
-
     def start_task(self):
         if self.current_reminder['type'] == 'periodic':
             self.current_reminder['next_time'] = QDateTime.currentDateTime().addSecs(self.current_reminder['frequency'] * 60)
@@ -488,7 +471,13 @@ class ReminderDialog(QDialog):
         if self.parent:
             pet_pos = self.parent.pos()
             pet_size = self.parent.size()
-            self.move(pet_pos.x(), pet_pos.y() - self.height())
+            dialog_size = self.size()
+            
+            # 计算X轴位置，使提醒框与猫咪中心对齐
+            x = pet_pos.x() + (pet_size.width() - dialog_size.width()) // 2
+            y = pet_pos.y() - dialog_size.height()
+            
+            self.move(x, y)
 
     def paintEvent(self, event):
         painter = QPainter(self)
