@@ -13,7 +13,7 @@ from collections import deque
 class ScreenPet(QWidget):
     def __init__(self):
         super().__init__()
-        self.pet_size = 66
+        self.pet_size = 50
         self.reminders = []
         self.dragging = False
         self.offset = None
@@ -46,9 +46,6 @@ class ScreenPet(QWidget):
         self.start_button.clicked.connect(self.start_task)
         self.delay_button.clicked.connect(self.delay_task)
 
-        debug_timer = QTimer(self)
-        debug_timer.timeout.connect(lambda: print(f"当前时间: {QDateTime.currentDateTime()}"))
-        debug_timer.start(60000)  # 每分钟触发一次
         self.animation_counter = 0
         self.animation_speed = 5  # 每5次移动才切换一次图片
 
@@ -306,7 +303,6 @@ class ScreenPet(QWidget):
     def closeEvent(self, event):
         self.save_reminders()
         event.accept()
-        event.ignore()
 
     def create_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(self)
