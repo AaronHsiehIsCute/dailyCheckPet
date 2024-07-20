@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QVBoxLa
 from PyQt6.QtCore import (QTimer, QDateTime, Qt, QRect, QTime, QPropertyAnimation, QEasingCurve, 
                           QPoint, QRectF)
 from PyQt6.QtGui import (QPixmap, QPainter, QIcon, QColor, QPainterPath)
+from collections import deque
 
 class ScreenPet(QWidget):
     def __init__(self):
@@ -51,6 +52,15 @@ class ScreenPet(QWidget):
         self.animation_counter = 0
         self.animation_speed = 5  # 每5次移动才切换一次图片
 
+        self.reminder_queue = deque()
+        self.current_reminder_dialog = None
+
+        self.move_timer.timeout.connect(self.update_reminder_position)
+
+    def update_reminder_position(self):
+        if self.current_reminder_dialog:
+            self.current_reminder_dialog.update_position()
+
     def load_images(self):
         self.images = {
             'left': [self.load_and_scale('pet_go_left.png'), self.load_and_scale('pet_go_left2.png')],
@@ -88,14 +98,20 @@ class ScreenPet(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = True
             self.offset = event.pos()
+        event.ignore()
+
 
     def mouseMoveEvent(self, event):
         if self.dragging:
             self.move(event.globalPosition().toPoint() - self.offset)
+            self.update_reminder_position()
+        event.ignore()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.dragging = False
+        event.ignore()
+
 
     def create_menu(self):
         menu = QMenu(self)
@@ -145,7 +161,7 @@ class ScreenPet(QWidget):
                 self.animation_counter = 0
 
             if hasattr(self, 'reminder_dialog') and self.reminder_dialog.isVisible():
-                self.reminder_dialog.update_position()
+                self.update_reminder_position()
 
     def check_reminders(self):
         now = QDateTime.currentDateTime()
@@ -162,11 +178,17 @@ class ScreenPet(QWidget):
 
     def show_reminder(self, reminder):
         print(f"显示提醒: {reminder['task']}")  # 调试输出
-        self.current_reminder = reminder
-        
-        self.reminder_dialog = ReminderDialog(reminder, self)
-        self.reminder_dialog.show()
-        self.reminder_dialog.update_position()
+        self.reminder_queue.append(reminder)
+        if not self.current_reminder_dialog:
+            self.show_next_reminder()
+
+    def show_next_reminder(self):
+        if self.reminder_queue:
+            reminder = self.reminder_queue.popleft()
+            self.current_reminder = reminder
+            self.current_reminder_dialog = ReminderDialog(reminder, self)
+            self.current_reminder_dialog.show()
+            self.current_reminder_dialog.update_position()
 
     def start_task(self):
         if self.current_reminder['type'] == 'periodic':
@@ -176,12 +198,24 @@ class ScreenPet(QWidget):
         self.save_reminders()
         if hasattr(self, 'reminder_dialog'):
             self.reminder_dialog.close()
+        self.close_current_reminder()
 
     def delay_task(self):
         self.current_reminder['next_time'] = QDateTime.currentDateTime().addSecs(self.current_reminder['delay'] * 60)
         self.save_reminders()
         if hasattr(self, 'reminder_dialog'):
             self.reminder_dialog.close()
+        self.close_current_reminder()
+
+    def close_current_reminder(self):
+        if self.current_reminder_dialog:
+            self.current_reminder_dialog.close()
+            self.current_reminder_dialog = None
+        self.show_next_reminder()
+
+    def close_all_reminders(self):
+        self.reminder_queue.clear()
+        self.close_current_reminder()
 
     def hide_reminder(self):
         self.speech_bubble.hide()
@@ -272,6 +306,7 @@ class ScreenPet(QWidget):
     def closeEvent(self, event):
         self.save_reminders()
         event.accept()
+        event.ignore()
 
     def create_tray_icon(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -421,6 +456,7 @@ class ReminderDialog(QDialog):
         self.reminder = reminder
         self.parent = parent
         self.initUI()
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
     def initUI(self):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -443,9 +479,12 @@ class ReminderDialog(QDialog):
         start_button.clicked.connect(self.start_task)
         delay_button = QPushButton("延后")
         delay_button.clicked.connect(self.delay_task)
+        close_all_button = QPushButton("全部关闭")
+        close_all_button.clicked.connect(self.close_all)
 
         button_layout.addWidget(start_button)
         button_layout.addWidget(delay_button)
+        button_layout.addWidget(close_all_button)
         background_layout.addLayout(button_layout)
 
         layout.addWidget(background)
@@ -461,11 +500,12 @@ class ReminderDialog(QDialog):
 
     def start_task(self):
         self.parent.start_task()
-        self.close()
 
     def delay_task(self):
         self.parent.delay_task()
-        self.close()
+
+    def close_all(self):
+        self.parent.close_all_reminders()
 
     def update_position(self):
         if self.parent:
